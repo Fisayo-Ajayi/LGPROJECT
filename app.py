@@ -1,51 +1,30 @@
-from fastapi import FastAPI, Request
+from flask import Flask, request, jsonify
 import joblib
-import pandas as pd
+import numpy as np
+import os
 
-# Initialize FastAPI app
-app = FastAPI()
+app = Flask(__name__)
 
 # Load models
-kmeans = joblib.load("kmeans_model.pkl")
-scaler = joblib.load("scaler.pkl")
+models = {}
+for fname in os.listdir("models"):
+    if fname.endswith(".pkl"):
+        model_name = fname.replace(".pkl", "")
+        models[model_name] = joblib.load(os.path.join("models", fname))
 
-@app.get("/")
+@app.route("/")
 def home():
-    return {"message": "✅ LG Customer Segmentation API is live on Hugging Face!"}
+    return jsonify({"message": "✅ SuccessLG API running on Vercel"})
 
-@app.post("/segment")
-async def segment(request: Request):
-    try:
-        data = await request.json()
-
-        required_features = [
-            "Age","Income","LoyaltyScore","OnlineEngagement",
-            "DaysSinceLastPurchase","QuantityPurchased",
-            "PreferenceScore","WillingnessToPay"
-        ]
-
-        # Check required features
-        if not all(f in data for f in required_features):
-            missing = [f for f in required_features if f not in data]
-            return {"error": f"Missing features: {missing}"}
-
-        # Convert input to DataFrame
-        features = pd.DataFrame([{
-            "Age": data["Age"],
-            "Income": data["Income"],
-            "LoyaltyScore": data["LoyaltyScore"],
-            "OnlineEngagement": data["OnlineEngagement"],
-            "DaysSinceLastPurchase": data["DaysSinceLastPurchase"],
-            "QuantityPurchased": data["QuantityPurchased"],
-            "PreferenceScore": data["PreferenceScore"],
-            "WillingnessToPay": data["WillingnessToPay"]
-        }])
-
-        # Scale + predict
-        features_scaled = scaler.transform(features)
-        cluster = kmeans.predict(features_scaled)[0]
-
-        return {"CustomerSegment": int(cluster)}
-
-    except Exception as e:
-        return {"error": str(e)}
+@app.route("/predict/<model_name>", methods=["POST"])
+def predict(model_name):
+    if model_name not in models:
+        return jsonify({"error": "Model not found"}), 404
+    
+    data = request.get_json()
+    features = np.array(data["features"]).reshape(1, -1)
+    prediction = models[model_name].predict(features)
+    return jsonify({
+        "model": model_name,
+        "prediction": prediction.tolist()
+    })
