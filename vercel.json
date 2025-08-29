@@ -1,21 +1,13 @@
 {
   "functions": {
-    "api/*.py": {
+    "api/index.py": {
       "runtime": "python3.11",
       "maxDuration": 10,
-      "memory": 512
+      "memory": 512,
+      "includeFiles": "models/*"
     }
   },
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python"
-    }
-  ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "app.py"
-    }
+    { "src": "/(.*)", "dest": "api/index.py" }
   ]
 }
