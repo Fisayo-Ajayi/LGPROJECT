@@ -1,51 +1,51 @@
-from fastapi import FastAPI, Request
+from flask import Flask, request, jsonify
 import joblib
-import pandas as pd
+import numpy as np
+import os
 
-# Initialize FastAPI app
-app = FastAPI()
+# Initialize Flask app
+app = Flask(__name__)
 
-# Load models
-kmeans = joblib.load("kmeans_model.pkl")
-scaler = joblib.load("scaler.pkl")
+# --- Load Models ---
+# Ensure these files exist in the "models" directory at the project root
+SCALER_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "scaler.pkl")
+KMEANS_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "kmeans.pkl")
 
-@app.get("/")
+scaler = joblib.load(SCALER_PATH)
+kmeans = joblib.load(KMEANS_PATH)
+
+
+# --- Routes ---
+@app.route("/")
 def home():
-    return {"message": "✅ LG Customer Segmentation API is live on Hugging Face!"}
+    return jsonify({
+        "message": "✅ LG Project API is running on Vercel!",
+        "endpoints": {
+            "/predict": "POST features to get a cluster prediction"
+        }
+    })
 
-@app.post("/segment")
-async def segment(request: Request):
+
+@app.route("/predict", methods=["POST"])
+def predict():
     try:
-        data = await request.json()
+        data = request.get_json()
 
-        required_features = [
-            "Age","Income","LoyaltyScore","OnlineEngagement",
-            "DaysSinceLastPurchase","QuantityPurchased",
-            "PreferenceScore","WillingnessToPay"
-        ]
+        if "features" not in data:
+            return jsonify({"error": "Missing 'features' key in request body"}), 400
 
-        # Check required features
-        if not all(f in data for f in required_features):
-            missing = [f for f in required_features if f not in data]
-            return {"error": f"Missing features: {missing}"}
-
-        # Convert input to DataFrame
-        features = pd.DataFrame([{
-            "Age": data["Age"],
-            "Income": data["Income"],
-            "LoyaltyScore": data["LoyaltyScore"],
-            "OnlineEngagement": data["OnlineEngagement"],
-            "DaysSinceLastPurchase": data["DaysSinceLastPurchase"],
-            "QuantityPurchased": data["QuantityPurchased"],
-            "PreferenceScore": data["PreferenceScore"],
-            "WillingnessToPay": data["WillingnessToPay"]
-        }])
-
-        # Scale + predict
+        # Convert to numpy and scale
+        features = np.array(data["features"]).reshape(1, -1)
         features_scaled = scaler.transform(features)
+
+        # Predict with KMeans
         cluster = kmeans.predict(features_scaled)[0]
 
-        return {"CustomerSegment": int(cluster)}
-
+        return jsonify({
+            "cluster": int(cluster),
+            "input_features": data["features"]
+        })
     except Exception as e:
-        return {"error": str(e)}
+        return jsonify({"error": str(e)}), 500
+
+
